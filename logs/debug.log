@@ -1,8 +1,1 @@
-2023-12-17 20:23:22,814 - config - ERROR - Error division by zero
-Traceback (most recent call last):
-  File "/home/vini/tg_captcha_bot/bot.py", line 117, in main
-    await bot_start()
-  File "/home/vini/tg_captcha_bot/bot.py", line 36, in bot_start
-    print(34 / 0)
-ZeroDivisionError: division by zero
-2023-12-17 20:27:09,753 - config - DEBUG - Bot started
+2023-12-23 21:22:47,530 - config.config - DEBUG - Bot started
