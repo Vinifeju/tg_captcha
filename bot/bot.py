@@ -59,38 +59,39 @@ async def start(message: Message) -> None:
     )
 
 
-@router.callback_query()
-async def inline_keyboard_callback(callback: CallbackQuery) -> None:
-
+@router.callback_query(lambda c: c.data in '1234')
+async def update_user_answers_callback(callback: CallbackQuery) -> None:
     user = loads(r.get_last(callback.from_user.id))
     if not user.get('captcha'): return
-    
-    if callback.data == 'send':
-        user_keys = r.found_startswith_key(callback.from_user.id)
-        user_ttl = r.ttl(user_keys[-1])
+
+    r.update_user_captcha_answers(callback.from_user.id, int(callback.data))
+
+
+@router.callback_query(lambda c: c.data == 'send')
+async def send_captcha_callback(callback: CallbackQuery) -> None:
+        user = loads(r.get_last(callback.from_user.id))
+        if not user.get('captcha'): return
+        
+        all_keys_startswith_user_id = r.found_startswith_key(callback.from_user.id)
+        user_ttl = r.ttl(all_keys_startswith_user_id[-1])
 
         captcha_template_answers = [i['animal_number'] for i in user['captcha']['captcha_template']]
 
         if captcha_template_answers == sorted(user['captcha']['user_answers']):
             bot_logger.debug(f'''Captcha solve - {callback.from_user.username} Server - {user['chat']} ''')
 
-            all_user_channels = [i.split(' ')[-1] for i in user_keys]
-
-            await CaptchaBotUtils.auto_unmute(bot, callback.from_user.id, all_user_channels)
-            r.delete(*user_keys)
-
-            await bot.send_message(
-                chat_id=callback.from_user.id,
-                text=CaptchaBotUtils.CAPTCHA_SUCCESS_MESSAGE
-            )
+            all_channels_with_mute = [i.split(' ')[-1] for i in all_keys_startswith_user_id]
+            await CaptchaBotUtils.auto_unmute(bot, callback.from_user.id, all_channels_with_mute)
+            r.delete(*all_keys_startswith_user_id)
+            await callback.message.answer(CaptchaBotUtils.CAPTCHA_SUCCESS_MESSAGE)
+            
         else:
             user['captcha']['user_answers'] = []
             user['captcha']['wrong_answers_count'] += 1
 
             if user['captcha']['wrong_answers_count'] >= CaptchaBotUtils.CAPTCHA_WRONG_ANSWER_COUNT:
                 bot_logger.debug(f'''Captcha close - {callback.from_user.username} Server - {user['chat']} ''')
-            
-                r.delete(*user_keys)
+                r.delete(*all_keys_startswith_user_id)
                 return await bot.send_message(chat_id=callback.from_user.id, text=CaptchaBotUtils.CAPTCHA_CLOSE_SESSION_MESSAGE)
 
             await bot.send_message(
@@ -99,11 +100,7 @@ async def inline_keyboard_callback(callback: CallbackQuery) -> None:
                     CaptchaBotUtils.CAPTCHA_WRONG_ANSWER_COUNT - user['captcha']['wrong_answers_count']
                     )
             )
-
-            r.setex(user_keys[-1], user_ttl, dumps(user))
-
-    elif callback.data in ['1', '2', '3', '4']:
-        r.update_user_captcha_answers(callback.from_user.id, int(callback.data))
+            r.setex(all_keys_startswith_user_id[-1], user_ttl, dumps(user))
 
 
 @router.chat_member(ChatMemberUpdatedFilter(IS_NOT_MEMBER >> IS_MEMBER))
